@@ -137,7 +137,7 @@ time:
      - 1.pool.ntp.org
      - 2.pool.ntp.org
     on_time:
-      - seconds: 0
+      - seconds: 10
         then:
           - script.execute:
               id: refresh_datetime
