@@ -130,7 +130,12 @@ uart:
 ##### Keeps time display updated #####
 time:
   - id: time_provider
-    platform: homeassistant
+    platform: sntp
+    timezone: "America/Recife"
+    servers:
+     - 0.pool.ntp.org
+     - 1.pool.ntp.org
+     - 2.pool.ntp.org
     on_time:
       - seconds: 0
         then:
