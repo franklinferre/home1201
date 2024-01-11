@@ -131,10 +131,9 @@ uart:
 time:
   - id: time_provider
     platform: sntp
-    timezone: "America/Recife"
     servers:
-     - 0.pool.ntp.org
-     - 1.pool.ntp.org
+     - a.ntp.br
+     - 186.208.0.1
      - 2.pool.ntp.org
     on_time:
       - seconds: 10
