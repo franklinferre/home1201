@@ -3,8 +3,8 @@
   alias: Samsung TV - Wake-On-LAN
   description: Envia pacote WoL para ligar a Samsung The Frame 55 quando solicitado
   triggers:
-    - trigger: event
-      event_type: samsung_smart_tv.turn_on
+    - trigger: samsungtv.turn_on
+      entity_id: media_player.samsung_the_frame_55
   conditions: []
   actions:
     - action: wake_on_lan.send_magic_packet
