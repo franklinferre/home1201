@@ -6,6 +6,9 @@ default_config:
 frontend:
   themes: !include_dir_merge_named themes
 
+zha:
+  custom_quirks_path: /config/custom_zha_quirks
+
 wake_on_lan:
 
 automation: !include automations.yaml

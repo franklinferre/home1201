@@ -373,3 +373,160 @@
       target:
         entity_id: light.addressable_v3_5v_8eeb93
   mode: single
+
+# === PAINEL BOTOES 6x1 SALA ===
+- id: painel_6x1_sala_botao_1
+  alias: Painel Sala - Botao 1 Difusa Mesa
+  description: Botao 1 do painel 6x1 controla a luz difusa da mesa
+  triggers:
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_1
+      to: "on"
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_1
+      to: "off"
+  conditions: []
+  actions:
+    - if:
+        - condition: state
+          entity_id: switch.painel_botoes_6x1_sala_switch_1
+          state: "on"
+      then:
+        - action: light.turn_on
+          target:
+            entity_id: light.tz3210_nvaik6gk_ts0502b_luz_4
+      else:
+        - action: light.turn_off
+          target:
+            entity_id: light.tz3210_nvaik6gk_ts0502b_luz_4
+  mode: single
+
+- id: painel_6x1_sala_botao_2
+  alias: Painel Sala - Botao 2 Spot Mesa Duplo
+  description: Botao 2 do painel 6x1 controla o spot da mesa duplo
+  triggers:
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_2
+      to: "on"
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_2
+      to: "off"
+  conditions: []
+  actions:
+    - if:
+        - condition: state
+          entity_id: switch.painel_botoes_6x1_sala_switch_2
+          state: "on"
+      then:
+        - action: light.turn_on
+          target:
+            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_2
+      else:
+        - action: light.turn_off
+          target:
+            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_2
+  mode: single
+
+- id: painel_6x1_sala_botao_3
+  alias: Painel Sala - Botao 3 Luz Porta Entrada
+  description: Botao 3 do painel 6x1 controla a luz da porta de entrada
+  triggers:
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_3
+      to: "on"
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_3
+      to: "off"
+  conditions: []
+  actions:
+    - if:
+        - condition: state
+          entity_id: switch.painel_botoes_6x1_sala_switch_3
+          state: "on"
+      then:
+        - action: light.turn_on
+          target:
+            entity_id: light.luz_porta_entrada_luz_3
+      else:
+        - action: light.turn_off
+          target:
+            entity_id: light.luz_porta_entrada_luz_3
+  mode: single
+
+- id: painel_6x1_sala_botao_4
+  alias: Painel Sala - Botao 4 Spot QD001
+  description: Botao 4 do painel 6x1 controla o spot QD001
+  triggers:
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_4
+      to: "on"
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_4
+      to: "off"
+  conditions: []
+  actions:
+    - if:
+        - condition: state
+          entity_id: switch.painel_botoes_6x1_sala_switch_4
+          state: "on"
+      then:
+        - action: light.turn_on
+          target:
+            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_5
+      else:
+        - action: light.turn_off
+          target:
+            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_5
+  mode: single
+
+- id: painel_6x1_sala_botao_5
+  alias: Painel Sala - Botao 5 Spot QD002 Duplo
+  description: Botao 5 do painel 6x1 controla o spot QD002 duplo
+  triggers:
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_5
+      to: "on"
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_5
+      to: "off"
+  conditions: []
+  actions:
+    - if:
+        - condition: state
+          entity_id: switch.painel_botoes_6x1_sala_switch_5
+          state: "on"
+      then:
+        - action: light.turn_on
+          target:
+            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_4
+      else:
+        - action: light.turn_off
+          target:
+            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_4
+  mode: single
+
+- id: painel_6x1_sala_botao_6
+  alias: Painel Sala - Botao 6 Spot QD003
+  description: Botao 6 do painel 6x1 controla o spot QD003
+  triggers:
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_6
+      to: "on"
+    - trigger: state
+      entity_id: switch.painel_botoes_6x1_sala_switch_6
+      to: "off"
+  conditions: []
+  actions:
+    - if:
+        - condition: state
+          entity_id: switch.painel_botoes_6x1_sala_switch_6
+          state: "on"
+      then:
+        - action: light.turn_on
+          target:
+            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_7
+      else:
+        - action: light.turn_off
+          target:
+            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_7
+  mode: single
