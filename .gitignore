@@ -12,6 +12,9 @@ secrets.yaml
 home-assistant_v2.db
 home-assistant_v2.db-shm
 home-assistant_v2.db-wal
+zigbee.db
+zigbee.db-shm
+zigbee.db-wal
 
 # Logs
 home-assistant.log
@@ -34,3 +37,25 @@ custom_components/__pycache__/
 
 # HACS
 .hacs/
+
+# Runtime files
+.ha_run.lock
+.shopping_list.json
+
+# AppDaemon (managed by HACS)
+appdaemon/
+
+# CLAUDE.md (auto-synced, not config)
+CLAUDE.md
+
+# Blueprints (managed by HACS/community)
+blueprints/
+
+# Custom components (managed by HACS)
+custom_components/
+
+# Claude Code HA tools
+claude-code-ha/
+
+# ESPHome (managed by addon)
+esphome/

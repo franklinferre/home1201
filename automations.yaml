@@ -142,7 +142,7 @@
     path: Blackymas/nspanel_blueprint.yaml
     input:
       language: pt
-      nspanel_name: 1d6a40653c3d06c15b86192744174492
+      nspanel_name: 2c1a5855d67c82a8b3067dd33f9ce80d
       weather_entity: weather.forecast_casa
       indoortemp: sensor.espanel_temperature
       left_button_hold_select: Default
