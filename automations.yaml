@@ -1,3 +1,17 @@
+# === SAMSUNG TV - WAKE ON LAN ===
+- id: samsung_tv_wake_on_lan
+  alias: Samsung TV - Wake-On-LAN
+  description: Envia pacote WoL para ligar a Samsung The Frame 55 quando solicitado
+  triggers:
+    - trigger: event
+      event_type: samsung_smart_tv.turn_on
+  conditions: []
+  actions:
+    - action: wake_on_lan.send_magic_packet
+      data:
+        mac: bc:45:5b:8d:d7:66
+  mode: single
+
 # === DESLIGAR TUDO (23:00 e 01:00) ===
 - id: '1715829043378'
   alias: Desligar Tudo - Noite
