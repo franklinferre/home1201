@@ -402,8 +402,8 @@
   mode: single
 
 - id: painel_6x1_sala_botao_2
-  alias: Painel Sala - Botao 2 Spot Mesa Duplo
-  description: Botao 2 do painel 6x1 controla o spot da mesa duplo
+  alias: Painel Sala - Botao 2 LED Meio
+  description: Botao 2 do painel 6x1 controla a fita LED meio
   triggers:
     - trigger: state
       entity_id: switch.painel_botoes_6x1_sala_switch_2
@@ -420,11 +420,11 @@
       then:
         - action: light.turn_on
           target:
-            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_2
+            entity_id: light.addressable_v3_5v_8df0af
       else:
         - action: light.turn_off
           target:
-            entity_id: light.tz3210_swa1zqs0_ts0502b_luz_2
+            entity_id: light.addressable_v3_5v_8df0af
   mode: single
 
 - id: painel_6x1_sala_botao_3
