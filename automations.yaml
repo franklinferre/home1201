@@ -1,0 +1,361 @@
+# === DESLIGAR TUDO (23:00 e 01:00) ===
+- id: '1715829043378'
+  alias: Desligar Tudo - Noite
+  description: Desliga todas as luzes as 23h e 01h, mantendo LED banheiros em 10%
+  triggers:
+    - trigger: time
+      at:
+        - "23:00:00"
+        - "01:00:00"
+  conditions: []
+  actions:
+    - action: script.desligar_tudo
+  mode: single
+
+# === LUZ NOTURNA BANHEIROS ===
+- id: '1721707584499'
+  alias: Noturna - Ligar LED Banheiros
+  description: Liga LED dos banheiros com brilho baixo as 23h
+  triggers:
+    - trigger: time_pattern
+      hours: "23"
+      minutes: "0"
+      seconds: "0"
+  conditions: []
+  actions:
+    - action: light.turn_on
+      target:
+        entity_id: light.addressable_v3_5v_954613
+      data:
+        kelvin: 3102
+        brightness_pct: 12
+  mode: single
+
+- id: '1721707774886'
+  alias: Noturna - Desligar LED Banheiros
+  description: Desliga LED dos banheiros ao nascer do sol
+  triggers:
+    - trigger: sun
+      event: sunrise
+      offset: 0
+  conditions: []
+  actions:
+    - action: light.turn_off
+      target:
+        entity_id: light.addressable_v3_5v_954613
+  mode: single
+
+# === WC SOCIAL ===
+- id: '1726312701993'
+  alias: WC Social - Interruptor Liga Exaustor e LED
+  description: Quando o interruptor do WC liga/desliga, controla exaustor e LED
+  triggers:
+    - trigger: state
+      entity_id: light.zb_wcsocial_luz_2
+  conditions: []
+  actions:
+    - if:
+        - condition: state
+          entity_id: light.zb_wcsocial_luz_2
+          state: "on"
+      then:
+        - action: light.turn_on
+          target:
+            entity_id: light.zb_wcsocial_luz
+          data:
+            flash: short
+        - action: light.turn_on
+          target:
+            entity_id: light.difusa_wc_luz
+      else:
+        - action: light.turn_off
+          target:
+            entity_id: light.difusa_wc_luz
+        - delay:
+            minutes: 2
+        - action: light.turn_off
+          target:
+            entity_id: light.zb_wcsocial_luz
+  mode: restart
+
+- id: '1726312227365'
+  alias: WC Social - Ciclo Exaustor Automatico
+  description: Se o exaustor desligar, religa por 15min e depois desliga
+  triggers:
+    - trigger: state
+      entity_id: light.zb_wcsocial_luz
+      to: "off"
+      for:
+        minutes: 30
+  conditions: []
+  actions:
+    - action: light.turn_on
+      target:
+        entity_id: light.zb_wcsocial_luz
+      data:
+        flash: short
+    - delay:
+        minutes: 15
+    - action: light.turn_off
+      target:
+        entity_id: light.zb_wcsocial_luz
+  mode: single
+
+- id: '1726320926015'
+  alias: WC Social - Desliga LED com Exaustor
+  description: Quando o exaustor desliga, desliga tambem o LED do WC
+  triggers:
+    - trigger: state
+      entity_id: light.zb_wcsocial_luz
+      to: "off"
+  conditions: []
+  actions:
+    - delay:
+        seconds: 1
+    - condition: state
+      entity_id: light.zb_wcsocial_luz
+      state: "off"
+    - action: light.turn_off
+      target:
+        entity_id: light.difusa_wc_luz
+  mode: single
+
+# === NSPanel (ESP001-SALA) ===
+- id: '1721676582511'
+  alias: NSPanel Sala - Configuracao
+  description: Configuracao do NSPanel da sala via blueprint Blackymas
+  use_blueprint:
+    path: Blackymas/nspanel_blueprint.yaml
+    input:
+      language: pt
+      nspanel_name: 1d6a40653c3d06c15b86192744174492
+      weather_entity: weather.forecast_casa
+      indoortemp: sensor.espanel_temperature
+      left_button_hold_select: Default
+      left_button_entity: light.cz05_cozinha_luz
+      left_button_name: COZINHA
+      right_button_entity: light.tz3210_nvaik6gk_ts0502b_luz_4
+      right_button_name: MESA
+      button_page01_label: FITAS LED
+      entity09_icon: ''
+      entity10_icon: ''
+      entity11_icon: ''
+      entity12_icon: ''
+      home_indoor_temp_icon: mdi:tailwind
+      home_value01: sensor.addressable_v3_5v_8df0af_controles_remotos_emparelhados
+      home_value02: sensor.addressable_v3_5v_8eeb93_controles_remotos_emparelhados
+      home_value03: sensor.addressable_v3_5v_954613_controles_remotos_emparelhados
+      chip_font_size: '8'
+      home_custom_button01: light.difusa_wc_luz
+      home_custom_button02: light.tz3210_swa1zqs0_ts0502b_luz_4
+      home_custom_button03_icon: mdi:spotlight-beam
+      home_custom_button03: light.tz3210_swa1zqs0_ts0502b_luz_2
+      relay_1_local_fallback: true
+      relay_2_local_fallback: true
+      home_button06_icon: ''
+      timezone: America/Recife (<-03>3)
+      screensaver_display_time: true
+      home_value01_icon: mdi:led-strip-variant
+      home_value02_icon: mdi:led-strip
+      home_value03_icon: mdi:led-strip-variant
+      home_custom_button01_icon: mdi:led-strip
+      home_custom_button02_icon: mdi:spotlight-beam
+      home_custom_button01_name: SPOT QUADRO01
+      home_custom_button02_name: SPOT QUADRO02
+      left_button_state_entity: light.cz05_cozinha_luz
+      right_button_state_entity: light.tz3210_nvaik6gk_ts0502b_luz_4
+      entity01: light.addressable_v3_5v_8eeb93
+      entity01_name: LED Quartos
+      entity01_icon: mdi:led-strip
+      utilities_enabled: true
+      screensaver_display_time_font_size: '11'
+      button_pages_icon_size: '10'
+      entity_page01_label: LEDS
+      home_outdoor_temp_font: '4'
+      home_indoor_temp_icon_color:
+        - 255
+        - 235
+        - 235
+      home_indoor_temp_label_color:
+        - 255
+        - 240
+        - 240
+      entity02: light.addressable_v3_5v_8df0af
+      entity02_icon: mdi:led-strip
+      entity02_name: LED CENTRAL
+      entity03: light.addressable_v3_5v_954613
+      entity03_name: LED BANHEIROS
+      entity03_icon: mdi:led-strip
+      domain_automation_button_action: toggle
+      button_page04_label: WC E DESLIGAR TUDO
+      entity25: light.difusa_wc_luz
+      entity25_name: WC SOCIAL
+      entity25_icon: mdi:alarm-light
+      entity26: script.desligar_tudo
+      entity26_name: DESLIGA TUDO
+      entity26_icon: mdi:alarm-light-off
+      date_format: '%A, %d/%m'
+      time_format: '%-H:%M'
+
+# === ILUMINACAO AUTOMATICA COZINHA ===
+- id: '1758632849863'
+  alias: Cozinha - Luz Automatica por Lux
+  description: Ajusta brilho da cozinha conforme iluminancia. Desliga apos inatividade.
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.sensor_3x1_coz
+      to: "on"
+    - trigger: state
+      entity_id: binary_sensor.sensor_3x1_coz
+      to: "off"
+  conditions: []
+  actions:
+    - choose:
+        - conditions:
+            - condition: time
+              after: "08:00:00"
+              before: "22:00:00"
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: binary_sensor.sensor_3x1_coz
+                      state: "on"
+                    - condition: numeric_state
+                      entity_id: sensor.sensor_3x1_coz_iluminancia
+                      below: 1000
+                  sequence:
+                    - action: light.turn_on
+                      target:
+                        entity_id: light.cz05_cozinha_luz
+                      data:
+                        brightness_pct: >
+                          {% set lux = states('sensor.sensor_3x1_coz_iluminancia') | int %}
+                          {% set max_lux = 1000 %}
+                          {% set min_brightness = 30 %}
+                          {% set max_brightness = 100 %}
+                          {% if lux <= 0 %}
+                            {{ max_brightness }}
+                          {% elif lux >= max_lux %}
+                            {{ min_brightness }}
+                          {% else %}
+                            {% set brightness = max_brightness - ((lux / max_lux) * (max_brightness - min_brightness)) %}
+                            {{ [brightness | round(0), min_brightness] | max }}
+                          {% endif %}
+                - conditions:
+                    - condition: state
+                      entity_id: binary_sensor.sensor_3x1_coz
+                      state: "off"
+                  sequence:
+                    - wait_for_trigger:
+                        - trigger: state
+                          entity_id: binary_sensor.sensor_3x1_coz
+                          to: "on"
+                      timeout: "00:10:00"
+                    - condition: state
+                      entity_id: binary_sensor.sensor_3x1_coz
+                      state: "off"
+                    - action: light.turn_on
+                      target:
+                        entity_id: light.cz05_cozinha_luz
+                      data:
+                        brightness_pct: 30
+                    - wait_for_trigger:
+                        - trigger: state
+                          entity_id: binary_sensor.sensor_3x1_coz
+                          to: "on"
+                      timeout: "00:01:00"
+                    - condition: state
+                      entity_id: binary_sensor.sensor_3x1_coz
+                      state: "off"
+                    - action: light.turn_off
+                      target:
+                        entity_id: light.cz05_cozinha_luz
+                      data:
+                        transition: 3
+        - conditions:
+            - condition: or
+              conditions:
+                - condition: time
+                  before: "08:00:00"
+                - condition: time
+                  after: "22:00:00"
+          sequence:
+            - choose:
+                - conditions:
+                    - condition: state
+                      entity_id: binary_sensor.sensor_3x1_coz
+                      state: "on"
+                    - condition: numeric_state
+                      entity_id: sensor.sensor_3x1_coz_iluminancia
+                      below: 1000
+                  sequence:
+                    - action: light.turn_on
+                      target:
+                        entity_id: light.cz05_cozinha_luz
+                      data:
+                        brightness_pct: >
+                          {% set lux = states('sensor.sensor_3x1_coz_iluminancia') | int %}
+                          {% set max_lux = 1000 %}
+                          {% set min_brightness = 30 %}
+                          {% set max_brightness = 100 %}
+                          {% if lux <= 0 %}
+                            {{ max_brightness }}
+                          {% elif lux >= max_lux %}
+                            {{ min_brightness }}
+                          {% else %}
+                            {% set brightness = max_brightness - ((lux / max_lux) * (max_brightness - min_brightness)) %}
+                            {{ [brightness | round(0), min_brightness] | max }}
+                          {% endif %}
+                - conditions:
+                    - condition: state
+                      entity_id: binary_sensor.sensor_3x1_coz
+                      state: "off"
+                  sequence:
+                    - wait_for_trigger:
+                        - trigger: state
+                          entity_id: binary_sensor.sensor_3x1_coz
+                          to: "on"
+                      timeout: "00:02:00"
+                    - condition: state
+                      entity_id: binary_sensor.sensor_3x1_coz
+                      state: "off"
+                    - action: light.turn_off
+                      target:
+                        entity_id: light.cz05_cozinha_luz
+  mode: single
+
+# === CONTROLE REMOTO ZHA ===
+- id: '1758986281418'
+  alias: Cozinha - Botao TS0601 DP101 Toggle
+  description: Botao Zigbee TS0601 (DP 101) faz toggle na luz da cozinha
+  triggers:
+    - trigger: event
+      event_type: zha_event
+      event_data:
+        device_ieee: a4:c1:38:17:1d:bd:e3:af
+        cluster_id: 61184
+        command: command_set_data
+        args:
+          dp: 101
+          value: 0
+  actions:
+    - action: light.toggle
+      target:
+        entity_id: light.cz05_cozinha_luz
+
+- id: '1761824474538'
+  alias: Controle 4bt - Botao 1 Toggle LED Quartos
+  description: Botao 1 do controle remoto 4 botoes faz toggle no LED dos quartos
+  triggers:
+    - trigger: device
+      device_id: 3e017ea05eb6b02e53dfbb8ba4f0cdd2
+      domain: zha
+      type: remote_button_short_press
+      subtype: button_1
+  conditions: []
+  actions:
+    - action: light.toggle
+      target:
+        entity_id: light.addressable_v3_5v_8eeb93
+  mode: single

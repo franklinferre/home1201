@@ -1,0 +1,47 @@
+desligar_tudo:
+  alias: Desligar Tudo
+  description: Desliga todas as luzes e coloca LED banheiros em 10%
+  icon: mdi:alarm-light-off
+  sequence:
+    - action: light.turn_off
+      target:
+        entity_id:
+          - light.tz3210_nvaik6gk_ts0502b_luz_3
+          - light.tz3210_nvaik6gk_ts0502b_luz_4
+          - light.tz3210_swa1zqs0_ts0502b_luz_2
+          - light.tz3210_swa1zqs0_ts0502b_luz_6
+          - light.tz3210_swa1zqs0_ts0502b_luz_7
+          - light.addressable_v3_5v_8df0af
+          - light.addressable_v3_5v_8eeb93
+          - light.cz05_cozinha_luz
+          - light.difusa_wc_luz
+          - light.tz3210_swa1zqs0_ts0502b_luz_4
+    - action: light.turn_off
+      target:
+        area_id:
+          - cozinha
+          - sala_de_estar
+          - escritorio
+          - wc_social
+          - varanda
+    - action: light.turn_on
+      target:
+        entity_id: light.addressable_v3_5v_954613
+      data:
+        brightness_pct: 10
+
+exaustor_wc_5min:
+  alias: Exaustor WC 5 Minutos
+  description: Liga exaustor do WC social por 5 minutos
+  icon: mdi:fan
+  sequence:
+    - action: light.turn_on
+      target:
+        entity_id: light.zb_wcsocial_luz
+      data:
+        flash: short
+    - delay:
+        minutes: 5
+    - action: light.turn_off
+      target:
+        entity_id: light.zb_wcsocial_luz

@@ -1,0 +1,36 @@
+# Home Assistant internals
+.storage/
+.cloud/
+.google.token
+.google_maps_location_sharing.cookies.*
+
+# Secrets
+secrets.yaml
+.env
+
+# Databases
+home-assistant_v2.db
+home-assistant_v2.db-shm
+home-assistant_v2.db-wal
+
+# Logs
+home-assistant.log
+home-assistant.log.*
+
+# OS/IDE
+.HA_VERSION
+__pycache__/
+*.pyc
+.DS_Store
+*.swp
+
+# Temp files
+tts/
+tmp/
+backups/
+
+# Custom components cache
+custom_components/__pycache__/
+
+# HACS
+.hacs/
