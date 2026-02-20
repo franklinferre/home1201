@@ -1,0 +1,317 @@
+# ══════════════════════════════════════════════════════════════
+# Smart Lighting - Sala de Estar e Cozinha
+# ══════════════════════════════════════════════════════════════
+#
+# Sistema de iluminacao inteligente baseado em:
+#   - Presenca (sensores de movimento ZHA)
+#   - Luminosidade natural (lux) com compensacao dinamica
+#   - Horario do dia (curva circadiana de brilho e kelvin)
+#   - Override manual via painel de botoes (timer 30min)
+#   - Alerta de bateria baixa dos sensores
+#
+# Curva de brilho maximo (0 lux):
+#   06h=40% → 08h=70% → 10-16h=80% → 18h=90% → 20h=100%
+#   → 22h=40% → 23h=15% → 00-06h=10%
+#
+# Compensacao: brilho = max * (1 - lux/max_lux)
+#   Sala: max_lux=800   Cozinha: max_lux=1000
+#
+# Kelvin circadiano:
+#   06h=2700K → 12h=4000K → 20h=3000K → 23h=2500K
+
+# ── Timer: override manual do painel ──
+timer:
+  smart_light_sala_manual:
+    name: "Sala - Pausa Modo Auto"
+    duration: "00:30:00"
+
+# ── Sensores calculados ──
+template:
+  - sensor:
+      # Brilho alvo da sala (%) baseado em presenca + lux + horario
+      - name: "Sala Brilho Alvo"
+        unique_id: sala_brilho_alvo
+        unit_of_measurement: "%"
+        icon: mdi:brightness-percent
+        state: >
+          {% set hour = now().hour + now().minute / 60.0 %}
+          {% set lux = states('sensor.sensor_sala_iluminancia') | float(0) %}
+          {% set presence = is_state('binary_sensor.sensor_sala', 'on') %}
+          {% if not presence %}0
+          {% else %}
+            {% if hour < 6 %}{% set mb = 10 %}
+            {% elif hour < 8 %}{% set mb = 40 + (hour - 6) * 15 %}
+            {% elif hour < 10 %}{% set mb = 70 + (hour - 8) * 5 %}
+            {% elif hour < 16 %}{% set mb = 80 %}
+            {% elif hour < 18 %}{% set mb = 80 + (hour - 16) * 5 %}
+            {% elif hour < 20 %}{% set mb = 90 + (hour - 18) * 5 %}
+            {% elif hour < 22 %}{% set mb = 100 - (hour - 20) * 30 %}
+            {% elif hour < 23 %}{% set mb = 40 - (hour - 22) * 25 %}
+            {% else %}{% set mb = 15 %}{% endif %}
+            {% set factor = [1.0 - lux / 800.0, 0.0] | max %}
+            {{ [(mb * factor) | round(0), 3] | max }}
+          {% endif %}
+
+      # Brilho alvo da cozinha (%) - curva mais alta para area funcional
+      - name: "Cozinha Brilho Alvo"
+        unique_id: cozinha_brilho_alvo
+        unit_of_measurement: "%"
+        icon: mdi:brightness-percent
+        state: >
+          {% set hour = now().hour + now().minute / 60.0 %}
+          {% set lux = states('sensor.sensor_3x1_coz_iluminancia') | float(0) %}
+          {% set presence = is_state('binary_sensor.sensor_3x1_coz', 'on') %}
+          {% if not presence %}0
+          {% else %}
+            {% if hour < 6 %}{% set mb = 15 %}
+            {% elif hour < 8 %}{% set mb = 50 + (hour - 6) * 15 %}
+            {% elif hour < 10 %}{% set mb = 80 + (hour - 8) * 5 %}
+            {% elif hour < 16 %}{% set mb = 90 %}
+            {% elif hour < 18 %}{% set mb = 90 + (hour - 16) * 5 %}
+            {% elif hour < 20 %}{% set mb = 100 %}
+            {% elif hour < 22 %}{% set mb = 100 - (hour - 20) * 25 %}
+            {% elif hour < 23 %}{% set mb = 50 - (hour - 22) * 30 %}
+            {% else %}{% set mb = 20 %}{% endif %}
+            {% set factor = [1.0 - lux / 1000.0, 0.0] | max %}
+            {{ [(mb * factor) | round(0), 5] | max }}
+          {% endif %}
+
+      # Temperatura de cor circadiana (K) - compartilhada entre ambientes
+      - name: "Iluminacao Kelvin Alvo"
+        unique_id: iluminacao_kelvin_alvo
+        unit_of_measurement: "K"
+        icon: mdi:sun-thermometer
+        state: >
+          {% set hour = now().hour + now().minute / 60.0 %}
+          {% if hour < 6 %}{{ 2500 }}
+          {% elif hour < 9 %}{{ (2700 + (hour - 6) * 200) | round(0) }}
+          {% elif hour < 12 %}{{ (3300 + (hour - 9) * 233) | round(0) }}
+          {% elif hour < 16 %}{{ 4000 }}
+          {% elif hour < 20 %}{{ (4000 - (hour - 16) * 250) | round(0) }}
+          {% elif hour < 23 %}{{ (3000 - (hour - 20) * 167) | round(0) }}
+          {% else %}{{ 2500 }}{% endif %}
+
+# ── Automacoes ──
+automation:
+  # ─── SALA: detecta override manual do painel ───
+  - id: smart_light_sala_manual_override
+    alias: Smart Light Sala - Override Manual
+    description: >
+      Quando um botao do painel e pressionado, pausa o modo automatico
+      por 30 minutos para respeitar o controle manual do usuario.
+    triggers:
+      - trigger: state
+        entity_id:
+          - switch.painel_botoes_6x1_sala_switch_1
+          - switch.painel_botoes_6x1_sala_switch_2
+          - switch.painel_botoes_6x1_sala_switch_3
+          - switch.painel_botoes_6x1_sala_switch_4
+          - switch.painel_botoes_6x1_sala_switch_5
+          - switch.painel_botoes_6x1_sala_switch_6
+    conditions:
+      # Ignora mudancas causadas pela propria automacao de presenca
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id != none }}"
+    actions:
+      - action: timer.start
+        target:
+          entity_id: timer.smart_light_sala_manual
+    mode: restart
+
+  # ─── SALA: ajuste continuo com presenca ───
+  - id: smart_light_sala_on
+    alias: Smart Light Sala - Ajuste Continuo
+    description: >
+      Ajusta brilho e temperatura de cor das luzes da sala continuamente
+      conforme presenca, luminosidade natural e horario do dia.
+      Atualiza a cada 3 minutos para acompanhar mudancas graduais.
+      Nao atua se o painel foi usado nos ultimos 30 minutos.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sensor_sala
+        to: "on"
+      - trigger: time_pattern
+        minutes: "/3"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.sensor_sala
+        state: "on"
+      - condition: state
+        entity_id: timer.smart_light_sala_manual
+        state: "idle"
+    actions:
+      - variables:
+          brilho: "{{ states('sensor.sala_brilho_alvo') | int(0) }}"
+          kelvin: "{{ states('sensor.iluminacao_kelvin_alvo') | int(3000) }}"
+      - if:
+          - condition: template
+            value_template: "{{ brilho >= 3 }}"
+        then:
+          # Luzes CCT (suportam kelvin): spots e difusa
+          - action: light.turn_on
+            target:
+              entity_id:
+                - light.tz3210_nvaik6gk_ts0502b_luz_4
+                - light.luz_porta_entrada_luz_3
+                - light.tz3210_swa1zqs0_ts0502b_luz_5
+                - light.tz3210_swa1zqs0_ts0502b_luz_4
+                - light.tz3210_swa1zqs0_ts0502b_luz_7
+            data:
+              brightness_pct: "{{ brilho }}"
+              kelvin: "{{ kelvin }}"
+              transition: 3
+          # LED strip (RGB, sem kelvin)
+          - action: light.turn_on
+            target:
+              entity_id: light.addressable_v3_5v_8df0af
+            data:
+              brightness_pct: "{{ brilho }}"
+              transition: 3
+        else:
+          # Luz natural suficiente - desliga tudo
+          - action: light.turn_off
+            target:
+              entity_id:
+                - light.tz3210_nvaik6gk_ts0502b_luz_4
+                - light.addressable_v3_5v_8df0af
+                - light.luz_porta_entrada_luz_3
+                - light.tz3210_swa1zqs0_ts0502b_luz_5
+                - light.tz3210_swa1zqs0_ts0502b_luz_4
+                - light.tz3210_swa1zqs0_ts0502b_luz_7
+            data:
+              transition: 5
+    mode: restart
+
+  # ─── SALA: desligar sem presenca ───
+  - id: smart_light_sala_off
+    alias: Smart Light Sala - Sem Presenca
+    description: >
+      Desliga luzes da sala com fade-out apos timeout sem presenca.
+      Timeout adaptativo: 15min a noite (TV/leitura), 10min de dia, 3min madrugada.
+      Cancela override manual e sincroniza painel ao desligar.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sensor_sala
+        to: "off"
+    actions:
+      - delay:
+          minutes: >
+            {% set h = now().hour %}
+            {% if 17 <= h < 23 %}15
+            {% elif 8 <= h < 17 %}10
+            {% else %}3{% endif %}
+      - condition: state
+        entity_id: binary_sensor.sensor_sala
+        state: "off"
+      # Fade-out suave
+      - action: light.turn_off
+        target:
+          entity_id:
+            - light.tz3210_nvaik6gk_ts0502b_luz_4
+            - light.addressable_v3_5v_8df0af
+            - light.luz_porta_entrada_luz_3
+            - light.tz3210_swa1zqs0_ts0502b_luz_5
+            - light.tz3210_swa1zqs0_ts0502b_luz_4
+            - light.tz3210_swa1zqs0_ts0502b_luz_7
+        data:
+          transition: 10
+      # Sincroniza LEDs do painel para off
+      - action: switch.turn_off
+        target:
+          entity_id:
+            - switch.painel_botoes_6x1_sala_switch_1
+            - switch.painel_botoes_6x1_sala_switch_2
+            - switch.painel_botoes_6x1_sala_switch_3
+            - switch.painel_botoes_6x1_sala_switch_4
+            - switch.painel_botoes_6x1_sala_switch_5
+            - switch.painel_botoes_6x1_sala_switch_6
+      # Retoma modo automatico
+      - action: timer.cancel
+        target:
+          entity_id: timer.smart_light_sala_manual
+    mode: restart
+
+  # ─── COZINHA: ajuste continuo com presenca ───
+  - id: smart_light_cozinha_on
+    alias: Smart Light Cozinha - Ajuste Continuo
+    description: >
+      Ajusta luz da cozinha conforme presenca, luminosidade e horario.
+      Cozinha usa curva de brilho mais alta por ser area funcional.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sensor_3x1_coz
+        to: "on"
+      - trigger: time_pattern
+        minutes: "/3"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.sensor_3x1_coz
+        state: "on"
+    actions:
+      - variables:
+          brilho: "{{ states('sensor.cozinha_brilho_alvo') | int(0) }}"
+          kelvin: "{{ states('sensor.iluminacao_kelvin_alvo') | int(3000) }}"
+      - if:
+          - condition: template
+            value_template: "{{ brilho >= 5 }}"
+        then:
+          - action: light.turn_on
+            target:
+              entity_id: light.cz05_cozinha_luz
+            data:
+              brightness_pct: "{{ brilho }}"
+              kelvin: "{{ kelvin }}"
+              transition: 2
+        else:
+          - action: light.turn_off
+            target:
+              entity_id: light.cz05_cozinha_luz
+            data:
+              transition: 3
+    mode: restart
+
+  # ─── COZINHA: desligar sem presenca ───
+  - id: smart_light_cozinha_off
+    alias: Smart Light Cozinha - Sem Presenca
+    description: >
+      Desliga luz da cozinha apos timeout sem presenca.
+      8min de dia, 2min de madrugada.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sensor_3x1_coz
+        to: "off"
+    actions:
+      - delay:
+          minutes: >
+            {% set h = now().hour %}
+            {% if 8 <= h < 22 %}8
+            {% else %}2{% endif %}
+      - condition: state
+        entity_id: binary_sensor.sensor_3x1_coz
+        state: "off"
+      - action: light.turn_off
+        target:
+          entity_id: light.cz05_cozinha_luz
+        data:
+          transition: 5
+    mode: restart
+
+  # ─── ALERTA: bateria baixa dos sensores ───
+  - id: smart_sensors_battery_low
+    alias: Sensores - Alerta Bateria Baixa
+    description: Notificacao persistente quando bateria cai abaixo de 20%
+    triggers:
+      - trigger: numeric_state
+        entity_id:
+          - sensor.sensor_sala_bateria
+          - sensor.sensor_3x1_coz_bateria
+        below: 20
+    actions:
+      - action: persistent_notification.create
+        data:
+          title: "Bateria Baixa"
+          message: >
+            {{ trigger.to_state.attributes.friendly_name }}:
+            {{ trigger.to_state.state }}%. Trocar bateria.
+          notification_id: "battery_{{ trigger.entity_id | replace('.', '_') }}"
+    mode: queued
