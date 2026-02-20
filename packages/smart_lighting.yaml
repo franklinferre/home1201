@@ -52,6 +52,13 @@ input_number:
     step: 1
     initial: 200
     icon: mdi:wall-sconce-flat
+  cal_coz_luz:
+    name: "Cal: Cozinha Luz (lux@100%)"
+    min: 100
+    max: 2000
+    step: 10
+    initial: 570
+    icon: mdi:ceiling-light
 
 # ── Sensores calculados ──
 template:
@@ -112,28 +119,34 @@ template:
           {% elif h < 23 %}{{ (3000 - (h - 20) * 167) | round(0) }}
           {% else %}{{ 2500 }}{% endif %}
 
-      # Cozinha brilho alvo (mantido simples - luz unica)
+      # Cozinha lux alvo fixo (390 lx = referencia 07:15 com 5700K)
+      - name: "Cozinha Lux Alvo"
+        unique_id: cozinha_lux_alvo
+        unit_of_measurement: "lx"
+        icon: mdi:sun-compass
+        state: "390"
+
+      # Cozinha brilho alvo - subtrai artificial para evitar feedback loop
       - name: "Cozinha Brilho Alvo"
         unique_id: cozinha_brilho_alvo
         unit_of_measurement: "%"
         icon: mdi:brightness-percent
         state: >
-          {% set h = now().hour + now().minute / 60.0 %}
-          {% set lux = states('sensor.sensor_3x1_coz_iluminancia') | float(0) %}
-          {% set presence = is_state('binary_sensor.sensor_3x1_coz', 'on') %}
+          {% set total = states('sensor.sensor_cozinha_iluminancia') | float(0) %}
+          {% set alvo = states('sensor.cozinha_lux_alvo') | float(475) %}
+          {% set cal = states('input_number.cal_coz_luz') | float(570) %}
+          {% set br = state_attr('light.cz05_cozinha_luz', 'brightness') | float(0) %}
+          {% set artificial = br / 255 * cal %}
+          {% set natural = [total - artificial, 0] | max %}
+          {% set presence = is_state('binary_sensor.sensor_cozinha', 'on') %}
           {% if not presence %}0
           {% else %}
-            {% if h < 6 %}{% set mb = 15 %}
-            {% elif h < 8 %}{% set mb = 50 + (h - 6) * 15 %}
-            {% elif h < 10 %}{% set mb = 80 + (h - 8) * 5 %}
-            {% elif h < 16 %}{% set mb = 90 %}
-            {% elif h < 18 %}{% set mb = 90 + (h - 16) * 5 %}
-            {% elif h < 20 %}{% set mb = 100 %}
-            {% elif h < 22 %}{% set mb = 100 - (h - 20) * 25 %}
-            {% elif h < 23 %}{% set mb = 50 - (h - 22) * 30 %}
-            {% else %}{% set mb = 20 %}{% endif %}
-            {% set factor = [1.0 - lux / 1000.0, 0.0] | max %}
-            {{ [(mb * factor) | round(0), 5] | max }}
+            {% set deficit = [alvo - natural, 0] | max %}
+            {% if deficit < 10 %}0
+            {% else %}
+              {% set pct = (deficit / cal * 100) | round(0) %}
+              {{ [[pct, 100] | min, 5] | max }}
+            {% endif %}
           {% endif %}
 
       # Corredor lux alvo (zona de passagem, mais baixo que sala)
@@ -596,18 +609,17 @@ automation:
     description: Ajusta luz da cozinha conforme presenca, lux e horario
     triggers:
       - trigger: state
-        entity_id: binary_sensor.sensor_3x1_coz
+        entity_id: binary_sensor.sensor_cozinha
         to: "on"
       - trigger: time_pattern
         minutes: "/3"
     conditions:
       - condition: state
-        entity_id: binary_sensor.sensor_3x1_coz
+        entity_id: binary_sensor.sensor_cozinha
         state: "on"
     actions:
       - variables:
           brilho: "{{ states('sensor.cozinha_brilho_alvo') | int(0) }}"
-          kelvin: "{{ states('sensor.iluminacao_kelvin_alvo') | int(3000) }}"
       - if:
           - condition: template
             value_template: "{{ brilho >= 5 }}"
@@ -617,7 +629,7 @@ automation:
               entity_id: light.cz05_cozinha_luz
             data:
               brightness_pct: "{{ brilho }}"
-              kelvin: "{{ kelvin }}"
+              kelvin: 5700
               transition: 2
         else:
           - action: light.turn_off
@@ -633,7 +645,7 @@ automation:
     description: Desliga cozinha apos timeout (8min dia / 2min madrugada)
     triggers:
       - trigger: state
-        entity_id: binary_sensor.sensor_3x1_coz
+        entity_id: binary_sensor.sensor_cozinha
         to: "off"
     actions:
       - delay:
@@ -642,7 +654,7 @@ automation:
             {% if 8 <= h < 22 %}8
             {% else %}2{% endif %}
       - condition: state
-        entity_id: binary_sensor.sensor_3x1_coz
+        entity_id: binary_sensor.sensor_cozinha
         state: "off"
       - action: light.turn_off
         target:
@@ -660,7 +672,8 @@ automation:
         entity_id:
           - sensor.sensor_sala_bateria
           - sensor.sensor_corredor_bateria
-          - sensor.sensor_3x1_coz_bateria
+          - sensor.sensor_cozinha_bateria
+          - sensor.sensor_varanda_bateria
         below: 20
     actions:
       - action: persistent_notification.create
