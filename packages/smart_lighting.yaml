@@ -1,21 +1,26 @@
 # ══════════════════════════════════════════════════════════════
-# Smart Lighting v2 - Sala de Estar e Cozinha
+# Smart Lighting v3 - Sala, Corredor e Cozinha
 # ══════════════════════════════════════════════════════════════
 #
-# Controle individual por lampada baseado em calibracao real:
-#   LED Meio:       630 lux @100% (principal, escala linear)
-#   DifusaMesa:     240 lux @100% (efetiva acima de 60%)
-#   Porta Entrada:  200 lux @100% (satura rapido)
-#   Spots QD1-3:    ~25 lux @100% (direcionais, acento)
+# Sala - controle individual por lampada (calibracao real):
+#   Fita LED Central: 630 lux @100% (sala + corredor)
+#   DifusaMesa:       240 lux @100% (efetiva acima de 60%)
+#   Porta Entrada:    200 lux @100% (satura rapido)
+#   Spots QD1-3:      ~25 lux @100% (direcionais, acento)
 #
-# Logica: estima luz natural subtraindo contribuicao artificial
-# conhecida, calcula deficit vs lux alvo, distribui entre luzes
-# com perfil diferente por horario (spots so de dia/tarde).
+# Corredor - 3 fitas LED (RGB, sem kelvin):
+#   Fita LED Banheiros: ilumina todo o corredor (principal)
+#   Fita LED Central:   corredor + sala (compartilhada)
+#   Fita LED Quartos:   parte corredor + parte sala (compartilhada)
+#   Zona de passagem: timeouts curtos, brilho moderado
 #
-# Lux alvo por horario:
+# Sala lux alvo por horario:
 #   06h=150 → 09h=300 → 12-17h=350 → 21h=120 → 23h=40
 #
-# Kelvin circadiano:
+# Corredor lux alvo (mais baixo, zona de passagem):
+#   06h=30 → 09h=120 → 12-17h=150 → 21h=60 → 23h=20
+#
+# Kelvin circadiano (CCT lights only):
 #   06h=2700K → 12h=4000K → 20h=3000K → 23h=2500K
 
 # ── Timer: override manual do painel ──
@@ -129,6 +134,43 @@ template:
             {% else %}{% set mb = 20 %}{% endif %}
             {% set factor = [1.0 - lux / 1000.0, 0.0] | max %}
             {{ [(mb * factor) | round(0), 5] | max }}
+          {% endif %}
+
+      # Corredor lux alvo (zona de passagem, mais baixo que sala)
+      - name: "Corredor Lux Alvo"
+        unique_id: corredor_lux_alvo
+        unit_of_measurement: "lx"
+        icon: mdi:sun-compass
+        state: >
+          {% set h = now().hour + now().minute / 60.0 %}
+          {% if h < 6 %}20
+          {% elif h < 9 %}{{ (60 + (h - 6) * 20) | round(0) }}
+          {% elif h < 12 %}{{ (120 + (h - 9) * 10) | round(0) }}
+          {% elif h < 17 %}150
+          {% elif h < 21 %}{{ (150 - (h - 17) * 22) | round(0) }}
+          {% elif h < 23 %}{{ (60 - (h - 21) * 20) | round(0) }}
+          {% else %}20{% endif %}
+
+      # Corredor brilho alvo para Fita LED Banheiros (principal do corredor)
+      - name: "Corredor Brilho Alvo"
+        unique_id: corredor_brilho_alvo
+        unit_of_measurement: "%"
+        icon: mdi:brightness-percent
+        state: >
+          {% set h = now().hour + now().minute / 60.0 %}
+          {% set lux = states('sensor.sensor_corredor_iluminancia') | float(0) %}
+          {% set alvo = states('sensor.corredor_lux_alvo') | float(80) %}
+          {% set presence = is_state('binary_sensor.sensor_corredor', 'on') %}
+          {% if not presence %}0
+          {% else %}
+            {% if h < 6 %}{% set mb = 8 %}
+            {% elif h < 9 %}{% set mb = 30 %}
+            {% elif h < 17 %}{% set mb = 45 %}
+            {% elif h < 21 %}{% set mb = 35 %}
+            {% elif h < 23 %}{% set mb = 20 %}
+            {% else %}{% set mb = 8 %}{% endif %}
+            {% set factor = [[1.0 - lux / (alvo + 0.1), 0.0] | max, 1.0] | min %}
+            {{ [(mb * factor) | round(0), 3] | max }}
           {% endif %}
 
 # ── Script de calibracao ──
@@ -399,6 +441,7 @@ automation:
     description: >
       Fade-out apos timeout sem presenca.
       15min noite (TV/leitura), 10min dia, 3min madrugada.
+      Fitas LED compartilhadas so desligam se corredor tambem sem presenca.
     triggers:
       - trigger: state
         entity_id: binary_sensor.sensor_sala
@@ -413,17 +456,30 @@ automation:
       - condition: state
         entity_id: binary_sensor.sensor_sala
         state: "off"
+      # Luzes exclusivas da sala - desliga sempre
       - action: light.turn_off
         target:
           entity_id:
             - light.tz3210_nvaik6gk_ts0502b_luz_4
-            - light.addressable_v3_5v_8df0af
             - light.luz_porta_entrada_luz_3
             - light.tz3210_swa1zqs0_ts0502b_luz_5
             - light.tz3210_swa1zqs0_ts0502b_luz_4
             - light.tz3210_swa1zqs0_ts0502b_luz_7
         data:
           transition: 10
+      # Fitas LED compartilhadas - so desliga se corredor tambem vazio
+      - if:
+          - condition: state
+            entity_id: binary_sensor.sensor_corredor
+            state: "off"
+        then:
+          - action: light.turn_off
+            target:
+              entity_id:
+                - light.addressable_v3_5v_8df0af
+                - light.addressable_v3_5v_8eeb93
+            data:
+              transition: 10
       - action: switch.turn_off
         target:
           entity_id:
@@ -436,6 +492,102 @@ automation:
       - action: timer.cancel
         target:
           entity_id: timer.smart_light_sala_manual
+    mode: restart
+
+  # ─── CORREDOR: ajuste com presenca ───
+  - id: smart_light_corredor_on
+    alias: Smart Light Corredor - Ajuste Presenca
+    description: >
+      Controla 3 fitas LED do corredor por presenca e lux.
+      Fita Banheiros=principal corredor, Central e Quartos=compartilhadas.
+      So ajusta fitas compartilhadas se sala sem presenca (evita conflito).
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sensor_corredor
+        to: "on"
+      - trigger: time_pattern
+        minutes: "/3"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.sensor_corredor
+        state: "on"
+    actions:
+      - variables:
+          brilho: "{{ states('sensor.corredor_brilho_alvo') | int(0) }}"
+          # Fitas compartilhadas: brilho reduzido (50% do principal)
+          brilho_comp: "{{ [(brilho * 0.5) | round(0), 3] | max if brilho > 2 else 0 }}"
+          sala_vazia: "{{ is_state('binary_sensor.sensor_sala', 'off') }}"
+      # Fita LED Banheiros - principal do corredor, controle direto
+      - if:
+          - condition: template
+            value_template: "{{ brilho > 2 }}"
+        then:
+          - action: light.turn_on
+            target:
+              entity_id: light.addressable_v3_5v_954613
+            data:
+              brightness_pct: "{{ brilho }}"
+              transition: 2
+        else:
+          - action: light.turn_off
+            target:
+              entity_id: light.addressable_v3_5v_954613
+            data:
+              transition: 3
+      # Fitas compartilhadas - so ajusta se sala vazia (senao sala controla)
+      - if:
+          - condition: template
+            value_template: "{{ sala_vazia and brilho_comp > 2 }}"
+        then:
+          - action: light.turn_on
+            target:
+              entity_id:
+                - light.addressable_v3_5v_8df0af
+                - light.addressable_v3_5v_8eeb93
+            data:
+              brightness_pct: "{{ brilho_comp }}"
+              transition: 2
+    mode: restart
+
+  # ─── CORREDOR: desligar sem presenca ───
+  - id: smart_light_corredor_off
+    alias: Smart Light Corredor - Sem Presenca
+    description: >
+      Desliga fitas LED apos timeout curto (zona de passagem).
+      3min dia, 1min madrugada. Fitas compartilhadas so desligam
+      se sala tambem sem presenca.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sensor_corredor
+        to: "off"
+    actions:
+      - delay:
+          minutes: >
+            {% set h = now().hour %}
+            {% if 8 <= h < 22 %}3
+            {% else %}1{% endif %}
+      - condition: state
+        entity_id: binary_sensor.sensor_corredor
+        state: "off"
+      # Fita Banheiros - exclusiva do corredor, desliga sempre
+      - action: light.turn_off
+        target:
+          entity_id: light.addressable_v3_5v_954613
+        data:
+          transition: 5
+      # Fitas compartilhadas - so desliga se sala tambem vazia
+      - if:
+          - condition: state
+            entity_id: binary_sensor.sensor_sala
+            state: "off"
+        then:
+          - action: light.turn_off
+            target:
+              entity_id:
+                - light.addressable_v3_5v_8df0af
+                - light.addressable_v3_5v_8eeb93
+            data:
+              transition: 5
     mode: restart
 
   # ─── COZINHA: ajuste continuo ───
@@ -507,6 +659,7 @@ automation:
       - trigger: numeric_state
         entity_id:
           - sensor.sensor_sala_bateria
+          - sensor.sensor_corredor_bateria
           - sensor.sensor_3x1_coz_bateria
         below: 20
     actions:
