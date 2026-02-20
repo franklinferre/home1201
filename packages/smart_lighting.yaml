@@ -59,6 +59,58 @@ input_number:
     step: 10
     initial: 570
     icon: mdi:ceiling-light
+  coz_learned_br_0:
+    name: "Coz Learned: Madrugada %"
+    min: 0
+    max: 100
+    step: 1
+    initial: 30
+    icon: mdi:lightbulb-auto
+  coz_learned_br_1:
+    name: "Coz Learned: Manha Cedo %"
+    min: 0
+    max: 100
+    step: 1
+    initial: 60
+    icon: mdi:lightbulb-auto
+  coz_learned_br_2:
+    name: "Coz Learned: Manha %"
+    min: 0
+    max: 100
+    step: 1
+    initial: 55
+    icon: mdi:lightbulb-auto
+  coz_learned_br_3:
+    name: "Coz Learned: Tarde %"
+    min: 0
+    max: 100
+    step: 1
+    initial: 50
+    icon: mdi:lightbulb-auto
+  coz_learned_br_4:
+    name: "Coz Learned: Entardecer %"
+    min: 0
+    max: 100
+    step: 1
+    initial: 65
+    icon: mdi:lightbulb-auto
+  coz_learned_br_5:
+    name: "Coz Learned: Noite %"
+    min: 0
+    max: 100
+    step: 1
+    initial: 70
+    icon: mdi:lightbulb-auto
+
+# ── Sensor: media movel varanda ──
+sensor:
+  - platform: statistics
+    name: "Varanda Lux Media 3d"
+    unique_id: varanda_lux_media_3d
+    entity_id: sensor.sensor_varanda_iluminancia
+    state_characteristic: mean
+    max_age:
+      days: 3
 
 # ── Sensores calculados ──
 template:
@@ -143,28 +195,43 @@ template:
           {% elif h < 23 %}{{ (5000 - (h - 20) * 167) | round(0) }}
           {% else %}4500{% endif %}
 
-      # Cozinha brilho alvo - subtrai artificial para evitar feedback loop
-      - name: "Cozinha Brilho Alvo"
-        unique_id: cozinha_brilho_alvo
+      # Cozinha feedback: erro % entre lux atual e alvo
+      - name: "Cozinha Feedback Erro"
+        unique_id: cozinha_feedback_erro
         unit_of_measurement: "%"
-        icon: mdi:brightness-percent
         state: >
-          {% set total = states('sensor.sensor_cozinha_iluminancia') | float(0) %}
-          {% set alvo = states('sensor.cozinha_lux_alvo') | float(475) %}
-          {% set cal = states('input_number.cal_coz_luz') | float(570) %}
-          {% set br = state_attr('light.cz05_cozinha_luz', 'brightness') | float(0) %}
-          {% set artificial = br / 255 * cal %}
-          {% set natural = [total - artificial, 0] | max %}
-          {% set presence = is_state('binary_sensor.sensor_cozinha', 'on') %}
-          {% if not presence %}0
-          {% else %}
-            {% set deficit = [alvo - natural, 0] | max %}
-            {% if deficit < 10 %}0
-            {% else %}
-              {% set pct = (deficit / cal * 100) | round(0) %}
-              {{ [[pct, 100] | min, 5] | max }}
-            {% endif %}
-          {% endif %}
+          {% set atual = states('sensor.sensor_cozinha_iluminancia') | float(0) %}
+          {% set alvo = states('sensor.cozinha_lux_alvo') | float(390) %}
+          {% if alvo > 0 %}
+            {{ ((atual - alvo) / alvo * 100) | round(1) }}
+          {% else %}0{% endif %}
+
+      # Cozinha feedback: fase do controlador
+      - name: "Cozinha Feedback Fase"
+        unique_id: cozinha_feedback_fase
+        state: >
+          {% set erro = states('sensor.cozinha_feedback_erro') | float(0) | abs %}
+          {% if erro > 5 %}brilho
+          {% elif erro > 2 %}kelvin
+          {% else %}estavel{% endif %}
+
+      # Cozinha: slot horario atual (0-5)
+      - name: "Cozinha Slot Horario"
+        unique_id: cozinha_slot_horario
+        state: >
+          {% set h = now().hour %}
+          {% if h < 6 %}0{% elif h < 9 %}1{% elif h < 12 %}2
+          {% elif h < 17 %}3{% elif h < 20 %}4{% else %}5{% endif %}
+
+      # Cozinha: confianca baseada na varanda (current vs 3d mean)
+      - name: "Cozinha Confianca Varanda"
+        unique_id: cozinha_confianca_varanda
+        unit_of_measurement: "%"
+        state: >
+          {% set atual = states('sensor.sensor_varanda_iluminancia') | float(1) %}
+          {% set media = states('sensor.varanda_lux_media_3d') | float(1) %}
+          {% set desvio = ((atual - media) / media * 100) | abs %}
+          {{ [100 - desvio, 0] | max | round(0) }}
 
       # Corredor lux alvo (zona de passagem, mais baixo que sala)
       - name: "Corredor Lux Alvo"
@@ -620,41 +687,104 @@ automation:
               transition: 5
     mode: restart
 
-  # ─── COZINHA: ajuste continuo ───
-  - id: smart_light_cozinha_on
-    alias: Smart Light Cozinha - Ajuste Continuo
-    description: Ajusta luz da cozinha conforme presenca, lux e horario
+  # ─── COZINHA: controlador feedback inteligente ───
+  - id: smart_light_cozinha_feedback
+    alias: Smart Light Cozinha - Feedback Controller
+    description: >
+      Controlador proporcional com 4 fases: liga com baseline aprendido,
+      ajusta brilho (erro >5%), ajusta kelvin (erro 2-5%), grava EMA (estavel).
     triggers:
       - trigger: state
         entity_id: binary_sensor.sensor_cozinha
         to: "on"
       - trigger: time_pattern
-        minutes: "/3"
+        minutes: "/1"
     conditions:
       - condition: state
         entity_id: binary_sensor.sensor_cozinha
         state: "on"
     actions:
       - variables:
-          brilho: "{{ states('sensor.cozinha_brilho_alvo') | int(0) }}"
-          kelvin: "{{ states('sensor.cozinha_kelvin_alvo') | int(5700) }}"
-      - if:
-          - condition: template
-            value_template: "{{ brilho >= 5 }}"
-        then:
-          - action: light.turn_on
-            target:
-              entity_id: light.cz05_cozinha_luz
-            data:
-              brightness_pct: "{{ brilho }}"
-              kelvin: "{{ kelvin }}"
-              transition: 2
-        else:
-          - action: light.turn_off
-            target:
-              entity_id: light.cz05_cozinha_luz
-            data:
-              transition: 3
+          lux_atual: "{{ states('sensor.sensor_cozinha_iluminancia') | float(0) }}"
+          lux_alvo: "{{ states('sensor.cozinha_lux_alvo') | float(390) }}"
+          erro_pct: "{{ ((lux_atual - lux_alvo) / [lux_alvo, 1] | max * 100) | round(1) }}"
+          erro_abs: "{{ erro_pct | float | abs }}"
+          br_raw: "{{ state_attr('light.cz05_cozinha_luz', 'brightness') | float(0) }}"
+          br_pct: "{{ (br_raw / 2.55) | round(1) }}"
+          k_atual: "{{ state_attr('light.cz05_cozinha_luz', 'color_temp_kelvin') | int(5700) }}"
+          k_alvo: "{{ states('sensor.cozinha_kelvin_alvo') | int(5700) }}"
+          luz_on: "{{ is_state('light.cz05_cozinha_luz', 'on') }}"
+          slot: "{{ states('sensor.cozinha_slot_horario') | int(3) }}"
+          learned_entity: "input_number.coz_learned_br_{{ slot }}"
+          learned_br: "{{ states(learned_entity) | float(50) }}"
+          confianca: "{{ states('sensor.cozinha_confianca_varanda') | float(50) }}"
+          cal: "{{ states('input_number.cal_coz_luz') | float(570) }}"
+      - choose:
+          # ── CASO 1: Luz OFF → ligar com baseline aprendido ──
+          - conditions:
+              - "{{ not luz_on }}"
+            sequence:
+              - variables:
+                  inicio_br: >
+                    {% if confianca | float > 80 %}
+                      {{ learned_br }}
+                    {% else %}
+                      {{ [((lux_alvo - lux_atual) / cal * 100) | round(0), 5] | max }}
+                    {% endif %}
+              - action: light.turn_on
+                target:
+                  entity_id: light.cz05_cozinha_luz
+                data:
+                  brightness_pct: "{{ [[inicio_br | int, 100] | min, 5] | max }}"
+                  kelvin: "{{ k_alvo }}"
+                  transition: 3
+
+          # ── CASO 2: Erro > 5% → ajuste de BRILHO (proporcional) ──
+          - conditions:
+              - "{{ luz_on and erro_abs | float > 5 }}"
+            sequence:
+              - variables:
+                  step: >
+                    {% set e = erro_pct | float %}
+                    {% set s = (e / -4) | round(1) %}
+                    {% if s > 0 %}{{ [s, 8] | min | round(0) }}
+                    {% else %}{{ [s, -8] | max | round(0) }}{% endif %}
+                  novo_br: "{{ [[br_pct | float + step | float, 100] | min, 1] | max | round(0) }}"
+              - action: light.turn_on
+                target:
+                  entity_id: light.cz05_cozinha_luz
+                data:
+                  brightness_pct: "{{ novo_br }}"
+                  kelvin: "{{ k_alvo }}"
+                  transition: 2
+
+          # ── CASO 3: Erro 2-5% → ajuste fino de KELVIN ──
+          - conditions:
+              - "{{ luz_on and erro_abs | float > 2 and erro_abs | float <= 5 }}"
+            sequence:
+              - variables:
+                  k_step: >
+                    {% set e = erro_pct | float %}
+                    {% if e > 0 %}{{ -150 }}{% else %}{{ 150 }}{% endif %}
+                  novo_k: "{{ [[k_atual + k_step | int, 6500] | min, 4500] | max }}"
+              - action: light.turn_on
+                target:
+                  entity_id: light.cz05_cozinha_luz
+                data:
+                  brightness_pct: "{{ br_pct | int }}"
+                  kelvin: "{{ novo_k }}"
+                  transition: 2
+
+          # ── CASO 4: Erro ≤ 2% → ESTAVEL → atualizar aprendizado ──
+          - conditions:
+              - "{{ luz_on and erro_abs | float <= 2 }}"
+            sequence:
+              - action: input_number.set_value
+                target:
+                  entity_id: "input_number.coz_learned_br_{{ slot }}"
+                data:
+                  value: >
+                    {{ (learned_br | float * 0.85 + br_pct | float * 0.15) | round(0) }}
     mode: restart
 
   # ─── COZINHA: desligar sem presenca ───
