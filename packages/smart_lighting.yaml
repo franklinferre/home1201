@@ -126,6 +126,23 @@ template:
         icon: mdi:sun-compass
         state: "390"
 
+      # Cozinha kelvin alvo - ajuste fino de luminosidade percebida
+      # Manha: 5700-6500K (frio, mais claridade para tarefas)
+      # Noite: 4500-6200K (faixa ampla, mais quente)
+      - name: "Cozinha Kelvin Alvo"
+        unique_id: cozinha_kelvin_alvo
+        unit_of_measurement: "K"
+        icon: mdi:sun-thermometer
+        state: >
+          {% set h = now().hour + now().minute / 60.0 %}
+          {% if h < 6 %}4500
+          {% elif h < 8 %}{{ (5700 + (h - 6) * 150) | round(0) }}
+          {% elif h < 12 %}{{ (6000 + (h - 8) * 125) | round(0) }}
+          {% elif h < 17 %}6500
+          {% elif h < 20 %}{{ (6200 - (h - 17) * 400) | round(0) }}
+          {% elif h < 23 %}{{ (5000 - (h - 20) * 167) | round(0) }}
+          {% else %}4500{% endif %}
+
       # Cozinha brilho alvo - subtrai artificial para evitar feedback loop
       - name: "Cozinha Brilho Alvo"
         unique_id: cozinha_brilho_alvo
@@ -620,6 +637,7 @@ automation:
     actions:
       - variables:
           brilho: "{{ states('sensor.cozinha_brilho_alvo') | int(0) }}"
+          kelvin: "{{ states('sensor.cozinha_kelvin_alvo') | int(5700) }}"
       - if:
           - condition: template
             value_template: "{{ brilho >= 5 }}"
@@ -629,7 +647,7 @@ automation:
               entity_id: light.cz05_cozinha_luz
             data:
               brightness_pct: "{{ brilho }}"
-              kelvin: 5700
+              kelvin: "{{ kelvin }}"
               transition: 2
         else:
           - action: light.turn_off
