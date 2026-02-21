@@ -29,10 +29,16 @@ input_boolean:
     name: "Smart Light - Modo Auto"
     icon: mdi:lightbulb-auto
 
-# ── Timer: override manual do painel ──
+# ── Timer: override manual ──
 timer:
   smart_light_sala_manual:
     name: "Sala - Pausa Modo Auto"
+    duration: "00:30:00"
+  smart_light_corredor_manual:
+    name: "Corredor - Pausa Modo Auto"
+    duration: "00:30:00"
+  smart_light_cozinha_manual:
+    name: "Cozinha - Pausa Modo Auto"
     duration: "00:30:00"
 
 # ── Calibracao: lux por lampada a 100% ──
@@ -400,6 +406,41 @@ automation:
           entity_id: timer.smart_light_sala_manual
     mode: restart
 
+  # ─── CORREDOR: detecta override manual ───
+  - id: smart_light_corredor_manual_override
+    alias: Smart Light Corredor - Override Manual
+    description: Pausa modo auto 30min ao controlar luz manualmente
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.addressable_v3_5v_954613
+          - light.addressable_v3_5v_8df0af
+          - light.addressable_v3_5v_8eeb93
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id != none }}"
+    actions:
+      - action: timer.start
+        target:
+          entity_id: timer.smart_light_corredor_manual
+    mode: restart
+
+  # ─── COZINHA: detecta override manual ───
+  - id: smart_light_cozinha_manual_override
+    alias: Smart Light Cozinha - Override Manual
+    description: Pausa modo auto 30min ao controlar luz manualmente
+    triggers:
+      - trigger: state
+        entity_id: light.cz05_cozinha_luz
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id != none }}"
+    actions:
+      - action: timer.start
+        target:
+          entity_id: timer.smart_light_cozinha_manual
+    mode: restart
+
   # ─── SALA: controle individual inteligente ───
   - id: smart_light_sala_on
     alias: Smart Light Sala - Ajuste Inteligente
@@ -620,6 +661,9 @@ automation:
       - condition: state
         entity_id: binary_sensor.sensor_corredor
         state: "on"
+      - condition: state
+        entity_id: timer.smart_light_corredor_manual
+        state: "idle"
     actions:
       - variables:
           brilho: "{{ states('sensor.corredor_brilho_alvo') | int(0) }}"
@@ -718,6 +762,9 @@ automation:
       - condition: state
         entity_id: binary_sensor.sensor_cozinha
         state: "on"
+      - condition: state
+        entity_id: timer.smart_light_cozinha_manual
+        state: "idle"
     actions:
       - variables:
           lux_atual: "{{ states('sensor.sensor_cozinha_iluminancia') | float(0) }}"
