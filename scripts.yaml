@@ -1,8 +1,11 @@
 desligar_tudo:
   alias: Desligar Tudo
-  description: Desliga todas as luzes e coloca LED banheiros em 10%
+  description: Desliga todas as luzes, pausa modo auto e coloca LED banheiros em 10%
   icon: mdi:alarm-light-off
   sequence:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.smart_light_enabled
     - action: light.turn_off
       target:
         entity_id:

@@ -23,6 +23,12 @@
 # Kelvin circadiano (CCT lights only):
 #   06h=2700K → 12h=4000K → 20h=3000K → 23h=2500K
 
+# ── Master switch: desliga modo automatico ──
+input_boolean:
+  smart_light_enabled:
+    name: "Smart Light - Modo Auto"
+    icon: mdi:lightbulb-auto
+
 # ── Timer: override manual do painel ──
 timer:
   smart_light_sala_manual:
@@ -409,6 +415,9 @@ automation:
         minutes: "/3"
     conditions:
       - condition: state
+        entity_id: input_boolean.smart_light_enabled
+        state: "on"
+      - condition: state
         entity_id: binary_sensor.sensor_sala
         state: "on"
       - condition: state
@@ -606,6 +615,9 @@ automation:
         minutes: "/3"
     conditions:
       - condition: state
+        entity_id: input_boolean.smart_light_enabled
+        state: "on"
+      - condition: state
         entity_id: binary_sensor.sensor_corredor
         state: "on"
     actions:
@@ -700,6 +712,9 @@ automation:
       - trigger: time_pattern
         minutes: "/1"
     conditions:
+      - condition: state
+        entity_id: input_boolean.smart_light_enabled
+        state: "on"
       - condition: state
         entity_id: binary_sensor.sensor_cozinha
         state: "on"
