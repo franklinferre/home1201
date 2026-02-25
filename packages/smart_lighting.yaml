@@ -40,6 +40,9 @@ timer:
   smart_light_cozinha_manual:
     name: "Cozinha - Pausa Modo Auto"
     duration: "00:30:00"
+  smart_light_escritorio_manual:
+    name: "Escritorio - Pausa Modo Auto"
+    duration: "00:30:00"
 
 # ── Calibracao: lux por lampada a 100% ──
 input_number:
@@ -113,6 +116,38 @@ input_number:
     step: 1
     initial: 70
     icon: mdi:lightbulb-auto
+  # ── Brilho minimo de conforto por ambiente ──
+  # Calibrado in-loco: valor abaixo do qual o ambiente fica desconfortavel.
+  # O sensor pode ler lux alto (posicao frontal a lampada) mas o ambiente
+  # precisa de um minimo de luz artificial para conforto real.
+  min_brilho_sala:
+    name: "Sala - Brilho Minimo %"
+    min: 0
+    max: 100
+    step: 5
+    initial: 25
+    icon: mdi:brightness-4
+  min_brilho_corredor:
+    name: "Corredor - Brilho Minimo %"
+    min: 0
+    max: 100
+    step: 5
+    initial: 15
+    icon: mdi:brightness-4
+  min_brilho_cozinha:
+    name: "Cozinha - Brilho Minimo %"
+    min: 0
+    max: 100
+    step: 5
+    initial: 40
+    icon: mdi:brightness-4
+  min_brilho_escritorio:
+    name: "Escritorio - Brilho Minimo %"
+    min: 0
+    max: 100
+    step: 5
+    initial: 40
+    icon: mdi:brightness-4
 
 # ── Sensor: media movel varanda ──
 sensor:
@@ -245,6 +280,41 @@ template:
           {% set desvio = ((atual - media) / media * 100) | abs %}
           {{ [100 - desvio, 0] | max | round(0) }}
 
+      # Escritorio lux alvo (ambiente de trabalho, precisa de bastante luz)
+      # 06h=200 → 09h=500 → 12-17h=600 → 21h=300 → 23h=100
+      - name: "Escritorio Lux Alvo"
+        unique_id: escritorio_lux_alvo
+        unit_of_measurement: "lx"
+        icon: mdi:sun-compass
+        state: >
+          {% set h = now().hour + now().minute / 60.0 %}
+          {% if h < 6 %}100
+          {% elif h < 9 %}{{ (200 + (h - 6) * 100) | round(0) }}
+          {% elif h < 12 %}{{ (500 + (h - 9) * 33) | round(0) }}
+          {% elif h < 17 %}600
+          {% elif h < 21 %}{{ (600 - (h - 17) * 75) | round(0) }}
+          {% elif h < 23 %}{{ (300 - (h - 21) * 100) | round(0) }}
+          {% else %}100{% endif %}
+
+      # Escritorio brilho alvo (4 luzes CCT)
+      - name: "Escritorio Brilho Alvo"
+        unique_id: escritorio_brilho_alvo
+        unit_of_measurement: "%"
+        icon: mdi:brightness-percent
+        state: >
+          {% set lux = states('sensor.sensor_escritorio_iluminancia') | float(0) %}
+          {% set alvo = states('sensor.escritorio_lux_alvo') | float(500) %}
+          {% set h = now().hour + now().minute / 60.0 %}
+          {% if h < 6 %}{% set mb = 25 %}
+          {% elif h < 9 %}{% set mb = 70 %}
+          {% elif h < 17 %}{% set mb = 90 %}
+          {% elif h < 21 %}{% set mb = 75 %}
+          {% elif h < 23 %}{% set mb = 45 %}
+          {% else %}{% set mb = 25 %}{% endif %}
+          {% set factor = [[1.0 - lux / (alvo + 0.1), 0.0] | max, 1.0] | min %}
+          {% set minimo = states('input_number.min_brilho_escritorio') | int(40) %}
+          {{ [(mb * factor) | round(0), minimo] | max }}
+
       # Corredor lux alvo (zona de passagem, mais baixo que sala)
       - name: "Corredor Lux Alvo"
         unique_id: corredor_lux_alvo
@@ -279,7 +349,8 @@ template:
             {% elif h < 23 %}{% set mb = 20 %}
             {% else %}{% set mb = 8 %}{% endif %}
             {% set factor = [[1.0 - lux / (alvo + 0.1), 0.0] | max, 1.0] | min %}
-            {{ [(mb * factor) | round(0), 3] | max }}
+            {% set minimo = states('input_number.min_brilho_corredor') | int(15) %}
+            {{ [(mb * factor) | round(0), minimo] | max }}
           {% endif %}
 
 # ── Script de calibracao ──
@@ -478,15 +549,17 @@ automation:
             {% elif h | float < 17 %}{{ (50 * c) | round(0) }}
             {% elif h | float < 21 %}{{ (40 * c) | round(0) }}
             {% else %}0{% endif %}
-          # DifusaMesa: sempre presente, luz de ambiente
+          # DifusaMesa: sempre presente, luz de ambiente (respeita minimo)
+          min_sala: "{{ states('input_number.min_brilho_sala') | int(25) }}"
           difusa: >
             {% set c = comp | float %}
-            {% if h | float < 6 %}{{ (25 * c) | round(0) }}
-            {% elif h | float < 9 %}{{ (45 * c) | round(0) }}
-            {% elif h | float < 17 %}{{ (60 * c) | round(0) }}
-            {% elif h | float < 21 %}{{ (70 * c) | round(0) }}
-            {% elif h | float < 23 %}{{ (55 * c) | round(0) }}
-            {% else %}{{ (20 * c) | round(0) }}{% endif %}
+            {% set mn = min_sala | int(25) %}
+            {% if h | float < 6 %}{{ [(25 * c) | round(0), mn] | max }}
+            {% elif h | float < 9 %}{{ [(45 * c) | round(0), mn] | max }}
+            {% elif h | float < 17 %}{{ [(60 * c) | round(0), mn] | max }}
+            {% elif h | float < 21 %}{{ [(70 * c) | round(0), mn] | max }}
+            {% elif h | float < 23 %}{{ [(55 * c) | round(0), mn] | max }}
+            {% else %}{{ [(20 * c) | round(0), mn] | max }}{% endif %}
           # Porta Entrada: complemento dia/tarde (satura rapido, max 35%)
           porta: >
             {% set c = comp | float %}
@@ -781,6 +854,7 @@ automation:
           learned_br: "{{ states(learned_entity) | float(50) }}"
           confianca: "{{ states('sensor.cozinha_confianca_varanda') | float(50) }}"
           cal: "{{ states('input_number.cal_coz_luz') | float(570) }}"
+          min_coz: "{{ states('input_number.min_brilho_cozinha') | int(40) }}"
       - choose:
           # ── CASO 1: Luz OFF → ligar com baseline aprendido ──
           - conditions:
@@ -797,7 +871,7 @@ automation:
                 target:
                   entity_id: light.cz05_cozinha_luz
                 data:
-                  brightness_pct: "{{ [[inicio_br | int, 100] | min, 5] | max }}"
+                  brightness_pct: "{{ [[inicio_br | int, 100] | min, min_coz | int] | max }}"
                   kelvin: "{{ k_alvo }}"
                   transition: 3
 
@@ -811,7 +885,7 @@ automation:
                     {% set s = (e / -4) | round(1) %}
                     {% if s > 0 %}{{ [s, 8] | min | round(0) }}
                     {% else %}{{ [s, -8] | max | round(0) }}{% endif %}
-                  novo_br: "{{ [[br_pct | float + step | float, 100] | min, 1] | max | round(0) }}"
+                  novo_br: "{{ [[br_pct | float + step | float, 100] | min, min_coz | int] | max | round(0) }}"
               - action: light.turn_on
                 target:
                   entity_id: light.cz05_cozinha_luz
@@ -873,6 +947,112 @@ automation:
           transition: 5
     mode: restart
 
+  # ─── ESCRITORIO: detecta override manual ───
+  - id: smart_light_escritorio_manual_override
+    alias: Smart Light Escritorio - Override Manual
+    description: Pausa modo auto 30min ao controlar luz manualmente
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.escritorio_difusa001_luz
+          - light.escritorio_difusa002_luz_2
+          - light.escritorio_spot001_luz
+          - light.escritorio_spot002_luz_3
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id is not none }}"
+    actions:
+      - action: timer.start
+        target:
+          entity_id: timer.smart_light_escritorio_manual
+    mode: restart
+
+  # ─── ESCRITORIO: ajuste com presenca ───
+  - id: smart_light_escritorio_on
+    alias: Smart Light Escritorio - Ajuste Presenca
+    description: >
+      Controla 4 luzes CCT do escritorio (2 difusas + 2 spots) por presenca e lux.
+      Brilho proporcional ao deficit de lux, kelvin circadiano.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sensor_escritorio
+        to: "on"
+      - trigger: time_pattern
+        minutes: "/3"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.smart_light_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.sensor_escritorio
+        state: "on"
+      - condition: state
+        entity_id: timer.smart_light_escritorio_manual
+        state: "idle"
+    actions:
+      - variables:
+          brilho: "{{ states('sensor.escritorio_brilho_alvo') | int(0) }}"
+          kelvin: "{{ states('sensor.iluminacao_kelvin_alvo') | int(3000) }}"
+      - if:
+          - condition: template
+            value_template: "{{ brilho > 2 }}"
+        then:
+          - action: light.turn_on
+            target:
+              entity_id:
+                - light.escritorio_difusa001_luz
+                - light.escritorio_difusa002_luz_2
+                - light.escritorio_spot001_luz
+                - light.escritorio_spot002_luz_3
+            data:
+              brightness_pct: "{{ brilho }}"
+              kelvin: "{{ kelvin }}"
+              transition: 3
+        else:
+          - action: light.turn_off
+            target:
+              entity_id:
+                - light.escritorio_difusa001_luz
+                - light.escritorio_difusa002_luz_2
+                - light.escritorio_spot001_luz
+                - light.escritorio_spot002_luz_3
+            data:
+              transition: 5
+    mode: restart
+
+  # ─── ESCRITORIO: desligar sem presenca ───
+  - id: smart_light_escritorio_off
+    alias: Smart Light Escritorio - Sem Presenca
+    description: Desliga escritorio apos timeout (10min dia / 3min madrugada)
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.sensor_escritorio
+        to: "off"
+        for:
+          minutes: 1
+    actions:
+      - delay:
+          minutes: >
+            {% set h = now().hour %}
+            {% if 8 <= h < 22 %}10
+            {% else %}3{% endif %}
+      - condition: state
+        entity_id: binary_sensor.sensor_escritorio
+        state: "off"
+      - action: light.turn_off
+        target:
+          entity_id:
+            - light.escritorio_difusa001_luz
+            - light.escritorio_difusa002_luz_2
+            - light.escritorio_spot001_luz
+            - light.escritorio_spot002_luz_3
+        data:
+          transition: 10
+      - action: timer.cancel
+        target:
+          entity_id: timer.smart_light_escritorio_manual
+    mode: restart
+
   # ─── ALERTA: bateria baixa ───
   - id: smart_sensors_battery_low
     alias: Sensores - Alerta Bateria Baixa
@@ -884,6 +1064,7 @@ automation:
           - sensor.sensor_corredor_bateria
           - sensor.sensor_cozinha_bateria
           - sensor.sensor_varanda_bateria
+          - sensor.sensor_escritorio_bateria
         below: 20
     actions:
       - action: persistent_notification.create
