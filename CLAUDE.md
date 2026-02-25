@@ -2,12 +2,33 @@
 
 Instructions for Claude Code when working with Home Assistant.
 
+**Always consult the latest Home Assistant documentation** at https://www.home-assistant.io/docs/ before suggesting configurations, automations, or integrations. HA updates frequently and syntax/features change between versions.
+
 ## File Structure
 
 YAML configurations are primarily stored in `/config/packages/*.yaml`.
 When searching, check all yaml files in `/config/*.yaml` and the packages folder.
 
 Configurations and automations should be in self-contained files in the packages/ folder.
+
+## What is Safe to Manage
+
+### SAFE (YAML files - edit directly)
+- `packages/*.yaml` - Automations, sensors, scripts, input helpers
+- `configuration.yaml` - Main configuration
+- `automations.yaml`, `scripts.yaml`, `scenes.yaml` - Root config files
+- `secrets.yaml` - Secret values (never commit to git)
+
+### RUNTIME STATE (never edit directly)
+Files in `.storage/` are managed by HA at runtime. Direct edits are **overwritten on restart**.
+- Exception: `.storage/lovelace*` can be edited + synced via `lovelace-sync`
+- Entity/device registry changes: use `ha-ws entity update` or `ha-ws device update`
+- For other `.storage/` changes: use the HA UI
+
+### Blueprint Files
+- Blueprint YAML uses `!input` tags - these are normal and expected
+- Located in `blueprints/` directory
+- Do not validate !input references as they are resolved at runtime
 
 ## Getting Entity/Device Information
 
@@ -337,3 +358,28 @@ Compact multi-entity display with icons. Good for sensor overviews.
 - **Template type errors**: Always use `| int` or `| float` filters
 - **Dashboard not updating**: Run `lovelace-sync` then hard refresh (Ctrl+F5)
 - **Validate JSON** before syncing: `python3 -m json.tool /config/.storage/lovelace.lovelace > /dev/null`
+
+## Development Workflow
+
+### Before Making Changes
+1. Identify if the change affects YAML files or `.storage/` files
+2. YAML files: edit directly, validate, reload
+3. `.storage/` files: use HA UI or `ha-ws` commands (except lovelace via `lovelace-sync`)
+
+### Deployment Checklist
+1. **Validate**: `ha core check --no-progress --raw-json`
+2. **Reload**: `ha-api call homeassistant reload_all` (or selective reload)
+3. **Verify**: Check entity states with `ha-api state <entity_id>`
+4. **Logs**: `ha-api get error_log` to confirm no errors
+
+### Automation Best Practices
+- Always ask the user if ambiguous which entity/device to target
+- Use `ha-ws entity list` or `ha-api search` to discover entities before writing automations
+- Trigger automations manually after deploy for instant feedback: `ha-ws call automation.trigger entity_id=automation.name`
+- Check logs after every automation change
+
+### Troubleshooting
+- **YAML syntax errors**: Check indentation, missing colons, incorrect !include paths
+- **Entity not found**: Verify with `ha-ws entity get <entity_id>` that it exists in registry
+- **Automation not firing**: Check if enabled, verify trigger conditions in logs
+- **Template errors in logs**: Test templates in Developer Tools > Template before deploying
