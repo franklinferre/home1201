@@ -23,10 +23,22 @@
 # Kelvin circadiano (CCT lights only):
 #   06h=2700K → 12h=4000K → 20h=3000K → 23h=2500K
 
-# ── Master switch: desliga modo automatico ──
+# ── Modo auto: geral + por ambiente ──
 input_boolean:
   smart_light_enabled:
     name: "Smart Light - Modo Auto"
+    icon: mdi:lightbulb-auto
+  smart_light_sala_enabled:
+    name: "Sala - Modo Auto"
+    icon: mdi:lightbulb-auto
+  smart_light_corredor_enabled:
+    name: "Corredor - Modo Auto"
+    icon: mdi:lightbulb-auto
+  smart_light_cozinha_enabled:
+    name: "Cozinha - Modo Auto"
+    icon: mdi:lightbulb-auto
+  smart_light_escritorio_enabled:
+    name: "Escritorio - Modo Auto"
     icon: mdi:lightbulb-auto
 
 # ── Timer: override manual ──
@@ -530,6 +542,9 @@ automation:
         entity_id: input_boolean.smart_light_enabled
         state: "on"
       - condition: state
+        entity_id: input_boolean.smart_light_sala_enabled
+        state: "on"
+      - condition: state
         entity_id: binary_sensor.sensor_sala
         state: "on"
       - condition: state
@@ -732,6 +747,9 @@ automation:
         entity_id: input_boolean.smart_light_enabled
         state: "on"
       - condition: state
+        entity_id: input_boolean.smart_light_corredor_enabled
+        state: "on"
+      - condition: state
         entity_id: binary_sensor.sensor_corredor
         state: "on"
       - condition: state
@@ -831,6 +849,9 @@ automation:
     conditions:
       - condition: state
         entity_id: input_boolean.smart_light_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.smart_light_cozinha_enabled
         state: "on"
       - condition: state
         entity_id: binary_sensor.sensor_cozinha
@@ -982,6 +1003,9 @@ automation:
     conditions:
       - condition: state
         entity_id: input_boolean.smart_light_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.smart_light_escritorio_enabled
         state: "on"
       - condition: state
         entity_id: binary_sensor.sensor_escritorio
