@@ -1077,6 +1077,29 @@ automation:
           entity_id: timer.smart_light_escritorio_manual
     mode: restart
 
+  # ─── MODO AUTO: religar por ambiente às 6h ───
+  - id: smart_light_morning_reenable
+    alias: Smart Light - Religar Modo Auto 6h
+    description: >
+      Religa os toggles por ambiente todo dia às 6h.
+      So atua se o toggle global estiver on (global off = viagem).
+    triggers:
+      - trigger: time
+        at: "06:00:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.smart_light_enabled
+        state: "on"
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id:
+            - input_boolean.smart_light_sala_enabled
+            - input_boolean.smart_light_corredor_enabled
+            - input_boolean.smart_light_cozinha_enabled
+            - input_boolean.smart_light_escritorio_enabled
+    mode: single
+
   # ─── ALERTA: bateria baixa ───
   - id: smart_sensors_battery_low
     alias: Sensores - Alerta Bateria Baixa
